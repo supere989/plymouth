@@ -62,6 +62,7 @@
 #include "ply-renderer.h"
 #include "ply-renderer-plugin.h"
 #include "ply-renderer-drm-tile.h"
+#include "ply-orientation.h"
 
 #define BYTES_PER_PIXEL (4)
 
@@ -2411,6 +2412,58 @@ remove_input_device (ply_renderer_backend_t *backend,
                      ply_input_device_t     *input_device)
 {
         ply_list_remove_data (backend->input_source.input_devices, input_device);
+}
+
+/* Called only on the renderer event loop, between frames. Scan-out dimensions
+ * stay native while the existing pixel-buffer code rotates software drawing. */
+bool
+ply_renderer_backend_set_orientation (ply_renderer_backend_t     *backend,
+                                      ply_pixel_buffer_rotation_t orientation)
+{
+        ply_list_node_t *node;
+        bool changed = false;
+
+        if (backend->outputs == NULL)
+                return false;
+
+        for (node = ply_list_get_first_node (backend->heads); node != NULL;
+             node = ply_list_get_next_node (backend->heads, node)) {
+                ply_renderer_head_t *head = ply_list_node_get_data (node);
+                ply_pixel_buffer_rotation_t rotation = PLY_PIXEL_BUFFER_ROTATE_UPRIGHT;
+                bool builtin = false;
+                bool shared_with_external = false;
+                int i;
+
+                for (i = 0; i < backend->outputs_len; i++) {
+                        ply_output_t *output = &backend->outputs[i];
+                        ply_renderer_head_t *output_head;
+
+                        if (!output->connected || output->controller_id == 0)
+                                continue;
+                        output_head = ply_hashtable_lookup (backend->heads_by_controller_id,
+                                                            (void *) (intptr_t) output->controller_id);
+                        if (output_head != head)
+                                continue;
+                        if (output_is_builtin (output)) {
+                                builtin = true;
+                                rotation = output->rotation;
+                        } else {
+                                shared_with_external = true;
+                        }
+                }
+                if (!builtin)
+                        continue;
+                if (!shared_with_external)
+                        rotation = ply_orientation_compose (rotation, orientation);
+                if (rotation == ply_pixel_buffer_get_device_rotation (head->pixel_buffer))
+                        continue;
+
+                ply_pixel_buffer_set_device_rotation (head->pixel_buffer, rotation);
+                ply_pixel_buffer_fill_with_hex_color (head->pixel_buffer, NULL, 0xff000000);
+                changed = true;
+                ply_trace ("built-in splash orientation changed to %d", rotation);
+        }
+        return changed;
 }
 
 ply_renderer_plugin_interface_t *

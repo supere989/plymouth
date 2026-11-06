@@ -360,6 +360,26 @@ ply_renderer_handle_change_event (ply_renderer_t *renderer)
         return false;
 }
 
+bool
+ply_renderer_set_orientation (ply_renderer_t              *renderer,
+                              ply_pixel_buffer_rotation_t orientation)
+{
+        typedef bool (*set_orientation_function_t) (ply_renderer_backend_t *,
+                                                     ply_pixel_buffer_rotation_t);
+        set_orientation_function_t set_orientation;
+
+        if (renderer->module_handle == NULL || !renderer->is_active)
+                return false;
+
+        /* An optional symbol preserves the existing renderer plugin ABI. */
+        set_orientation = (set_orientation_function_t)
+                ply_module_look_up_function (renderer->module_handle,
+                                             "ply_renderer_backend_set_orientation");
+        if (set_orientation == NULL)
+                return false;
+        return set_orientation (renderer->backend, orientation);
+}
+
 void
 ply_renderer_activate (ply_renderer_t *renderer)
 {

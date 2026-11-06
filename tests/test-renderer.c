@@ -155,6 +155,16 @@ test_renderer_delegates_backend_lifecycle (void)
         PLY_TEST_ASSERT (state->add_input_device_count == 1);
         PLY_TEST_ASSERT (state->remove_input_device_count == 1);
 
+        PLY_TEST_ASSERT (ply_renderer_set_orientation (renderer, PLY_PIXEL_BUFFER_ROTATE_CLOCKWISE));
+        ply_pixel_buffer_get_size (buffer, &size);
+        PLY_TEST_ASSERT (size.width == 50 && size.height == 80);
+        PLY_TEST_ASSERT (!ply_renderer_set_orientation (renderer, PLY_PIXEL_BUFFER_ROTATE_CLOCKWISE));
+        ply_renderer_deactivate (renderer);
+        PLY_TEST_ASSERT (!ply_renderer_set_orientation (renderer, PLY_PIXEL_BUFFER_ROTATE_UPRIGHT));
+        PLY_TEST_ASSERT (ply_pixel_buffer_get_device_rotation (buffer) == PLY_PIXEL_BUFFER_ROTATE_CLOCKWISE);
+        ply_renderer_activate (renderer);
+        PLY_TEST_ASSERT (ply_renderer_set_orientation (renderer, PLY_PIXEL_BUFFER_ROTATE_UPRIGHT));
+
         ply_renderer_close (renderer);
         PLY_TEST_ASSERT (!ply_renderer_is_active (renderer));
         PLY_TEST_ASSERT (state->unmap_count == 1);

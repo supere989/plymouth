@@ -43,6 +43,7 @@
 #include "ply-list.h"
 #include "ply-utils.h"
 #include "ply-input-device.h"
+#include "ply-orientation.h"
 #include "ply-vconsole-private.h"
 
 #define SUBSYSTEM_DRM "drm"
@@ -72,6 +73,9 @@ struct _ply_device_manager
         ply_list_t                         *keyboards;
         ply_list_t                         *text_displays;
         ply_list_t                         *pixel_displays;
+        ply_orientation_t                  *orientation_sensor;
+        ply_pixel_buffer_rotation_t         orientation;
+        bool                                orientation_valid;
         struct udev                        *udev_context;
         struct udev_monitor                *udev_monitor;
         ply_fd_watch_t                     *fd_watch;
@@ -149,6 +153,35 @@ free_displays_for_renderer (ply_device_manager_t *manager,
 
                 node = next_node;
         }
+}
+
+static void
+rotate_renderer (const char           *device_path,
+                 ply_renderer_t       *renderer,
+                 ply_device_manager_t *manager)
+{
+        if (ply_renderer_set_orientation (renderer, manager->orientation)) {
+                /* Reuse hotplug handling so every theme relayouts and the daemon
+                 * restores any password/question prompt on the resized view. */
+                free_displays_for_renderer (manager, renderer);
+                create_pixel_displays_for_renderer (manager, renderer);
+        }
+}
+
+static void
+poll_orientation (ply_device_manager_t *manager,
+                  ply_event_loop_t    *loop)
+{
+        if (!manager->paused && manager->renderers_activated &&
+            ply_orientation_read (manager->orientation_sensor, &manager->orientation)) {
+                manager->orientation_valid = true;
+                ply_hashtable_foreach (manager->renderers,
+                                       (ply_hashtable_foreach_func_t *) rotate_renderer,
+                                       manager);
+        }
+        ply_event_loop_watch_for_timeout (loop, 0.2,
+                                          (ply_event_loop_timeout_handler_t) poll_orientation,
+                                          manager);
 }
 
 static void
@@ -934,6 +967,13 @@ ply_device_manager_free (ply_device_manager_t *manager)
         if (manager == NULL)
                 return;
 
+        if (manager->orientation_sensor != NULL) {
+                ply_event_loop_stop_watching_for_timeout (manager->loop,
+                                                          (ply_event_loop_timeout_handler_t) poll_orientation,
+                                                          manager);
+                ply_orientation_free (manager->orientation_sensor);
+        }
+
         ply_event_loop_stop_watching_for_exit (manager->loop,
                                                (ply_event_loop_exit_handler_t)
                                                detach_from_event_loop,
@@ -1008,6 +1048,9 @@ create_pixel_displays_for_renderer (ply_device_manager_t *manager,
 {
         ply_list_t *heads;
         ply_list_node_t *node;
+
+        if (manager->orientation_valid)
+                ply_renderer_set_orientation (renderer, manager->orientation);
 
         heads = ply_renderer_get_heads (renderer);
 
@@ -1301,6 +1344,12 @@ ply_device_manager_watch_devices (ply_device_manager_t               *manager,
                 ply_trace ("udev support disabled, creating fallback devices");
                 create_fallback_devices (manager);
                 return;
+        }
+
+        if (manager->orientation_sensor == NULL &&
+            ply_kernel_command_line_has_argument ("plymouth.autorotate")) {
+                manager->orientation_sensor = ply_orientation_new ("/sys/bus/iio/devices");
+                poll_orientation (manager, manager->loop);
         }
 
 #ifdef HAVE_UDEV

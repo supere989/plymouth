@@ -37,6 +37,16 @@ struct _ply_renderer_backend
 
 static test_renderer_plugin_state_t state;
 
+bool
+ply_renderer_backend_set_orientation (ply_renderer_backend_t     *backend,
+                                      ply_pixel_buffer_rotation_t orientation)
+{
+        if (ply_pixel_buffer_get_device_rotation (backend->buffer) == orientation)
+                return false;
+        ply_pixel_buffer_set_device_rotation (backend->buffer, orientation);
+        return true;
+}
+
 const test_renderer_plugin_state_t *
 test_renderer_plugin_get_state (void)
 {

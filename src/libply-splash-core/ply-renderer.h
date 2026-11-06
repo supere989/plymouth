@@ -61,6 +61,9 @@ bool ply_renderer_open (ply_renderer_t *renderer,
 void ply_renderer_close (ply_renderer_t *renderer);
 /* Returns true when the heads have changed as a result of the change event */
 bool ply_renderer_handle_change_event (ply_renderer_t *renderer);
+/* Returns true when built-in display buffers changed orientation. */
+bool ply_renderer_set_orientation (ply_renderer_t              *renderer,
+                                   ply_pixel_buffer_rotation_t orientation);
 void ply_renderer_activate (ply_renderer_t *renderer);
 void ply_renderer_deactivate (ply_renderer_t *renderer);
 bool ply_renderer_is_active (ply_renderer_t *renderer);

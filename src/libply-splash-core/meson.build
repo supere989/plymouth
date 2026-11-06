@@ -4,6 +4,7 @@ libply_splash_core_sources = files(
   'ply-input-device.c',
   'ply-kmsg-reader.c',
   'ply-keyboard.c',
+  'ply-orientation.c',
   'ply-pixel-buffer.c',
   'ply-pixel-display.c',
   'ply-rich-text.c',

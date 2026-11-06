@@ -28,6 +28,16 @@ test_timeout = 30
 
 subdir('plugins')
 
+orientation_test = executable(
+  'test-orientation',
+  'test-orientation.c',
+  dependencies: [libply_dep, libply_splash_core_dep],
+  c_args: test_c_args,
+  include_directories: include_directories('.'),
+)
+test('splash-core-orientation', orientation_test,
+  env: test_environment, protocol: 'tap', suite: ['unit', 'splash-core'])
+
 foreach test_name, test_source : libply_test_sources
   test_executable = executable(
     'test-' + test_name,
