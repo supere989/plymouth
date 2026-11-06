@@ -29,6 +29,12 @@ notifications rebuild theme views and restore the daemon's current interaction
 state, including password prompts. Sampling is suspended while the device
 manager is paused or its renderers are inactive.
 
+On a GPU with a single connected built-in panel, the framebuffer text console
+is kept in the same orientation through `fbcon/rotate_all`. This also aligns
+boot messages revealed during the transition to the login compositor. The
+console rotation is cached to avoid repeated text-console redraws. Missing or
+unwritable console rotation support does not prevent graphical splash rotation.
+
 Build and run the regression tests with:
 
 ```sh

@@ -158,6 +158,8 @@ typedef struct
 
 struct _ply_renderer_backend
 {
+        bool                        console_rotation_valid;
+        ply_pixel_buffer_rotation_t console_rotation;
         ply_event_loop_t           *loop;
         ply_terminal_t             *terminal;
         ply_terminal_t             *local_console_terminal;
@@ -2423,7 +2425,7 @@ ply_renderer_backend_set_orientation (ply_renderer_backend_t     *backend,
         ply_list_node_t *node;
         bool changed = false;
 
-        if (backend->outputs == NULL)
+        if (backend->outputs == NULL || !backend->is_active)
                 return false;
 
         for (node = ply_list_get_first_node (backend->heads); node != NULL;
@@ -2455,6 +2457,19 @@ ply_renderer_backend_set_orientation (ply_renderer_backend_t     *backend,
                         continue;
                 if (!shared_with_external)
                         rotation = ply_orientation_compose (rotation, orientation);
+                /* fbcon owns the text exposed when the splash releases its VT.
+                 * Only rotate all consoles when this GPU has a single output,
+                 * avoiding a global text rotation on a multi-monitor setup. */
+                if (backend->connected_count == 1 &&
+                    (!backend->console_rotation_valid || backend->console_rotation != rotation)) {
+                        backend->console_rotation_valid = ply_orientation_update_console (
+                                "/sys/class/graphics/fbcon/rotate_all", rotation);
+                        if (backend->console_rotation_valid) {
+                                backend->console_rotation = rotation;
+                                ply_trace ("framebuffer console orientation changed to %d", rotation);
+                        }
+                }
+
                 if (rotation == ply_pixel_buffer_get_device_rotation (head->pixel_buffer))
                         continue;
 

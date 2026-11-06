@@ -2,11 +2,13 @@
 #include "ply-orientation.h"
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <glob.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #ifdef HAVE_UDEV
 #include <libudev.h>
@@ -107,6 +109,26 @@ ply_orientation_compose (ply_pixel_buffer_rotation_t panel,
         };
 
         return rotations[(angles[panel] + angles[orientation]) % 4];
+}
+
+bool
+ply_orientation_update_console (const char                 *path,
+                                ply_pixel_buffer_rotation_t rotation)
+{
+        static const char angles[] = { '0', '2', '1', '3' };
+        char value[2] = { 0, '\n' };
+        int fd;
+        bool success;
+
+        if ((unsigned int) rotation >= sizeof(angles))
+                return false;
+        value[0] = angles[rotation];
+        fd = open (path, O_WRONLY | O_CLOEXEC);
+        if (fd < 0)
+                return false;
+        success = write (fd, value, sizeof(value)) == (ssize_t) sizeof(value);
+        close (fd);
+        return success;
 }
 
 static bool

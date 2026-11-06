@@ -20,5 +20,7 @@ bool ply_orientation_parse_matrix (const char *text,
                                    double      matrix[9]);
 ply_pixel_buffer_rotation_t ply_orientation_compose (ply_pixel_buffer_rotation_t panel,
                                                      ply_pixel_buffer_rotation_t orientation);
+bool ply_orientation_update_console (const char                 *path,
+                                     ply_pixel_buffer_rotation_t rotation);
 
 #endif

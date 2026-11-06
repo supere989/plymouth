@@ -128,11 +128,39 @@ test_late_sensor_debounce_calibration_and_recovery (void)
         return true;
 }
 
+static bool
+test_console_rotation_mapping (void)
+{
+        char path[] = "/tmp/plymouth-console-XXXXXX";
+        const char expected[] = { '0', '2', '1', '3' };
+        int fd = mkstemp (path);
+        unsigned int i;
+
+        PLY_TEST_ASSERT (fd >= 0);
+        close (fd);
+        for (i = 0; i < sizeof(expected); i++) {
+                char actual[3] = { 0 };
+                FILE *file;
+
+                PLY_TEST_ASSERT (ply_orientation_update_console (path, i));
+                file = fopen (path, "r");
+                PLY_TEST_ASSERT (file != NULL);
+                PLY_TEST_ASSERT (fread (actual, 1, 2, file) == 2);
+                fclose (file);
+                PLY_TEST_ASSERT (actual[0] == expected[i] && actual[1] == '\n');
+        }
+        PLY_TEST_ASSERT (!ply_orientation_update_console (path, 99));
+        PLY_TEST_ASSERT (unlink (path) == 0);
+        PLY_TEST_ASSERT (!ply_orientation_update_console (path, PLY_PIXEL_BUFFER_ROTATE_UPRIGHT));
+        return true;
+}
+
 static const ply_test_case_t cases[] = {
         { "four cardinal orientations", test_cardinal_orientations },
         { "flat, diagonal and invalid readings", test_uncertain_readings_preserve_orientation },
         { "mount matrices and panel rotation", test_mount_matrix_and_composition },
-        { "late sensor, debounce, calibration and recovery", test_late_sensor_debounce_calibration_and_recovery }
+        { "late sensor, debounce, calibration and recovery", test_late_sensor_debounce_calibration_and_recovery },
+        { "console angle mapping and unavailable interface", test_console_rotation_mapping }
 };
 
 PLY_TEST_MAIN (cases)
