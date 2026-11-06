@@ -66,19 +66,27 @@ test_mount_matrix_and_composition (void)
 }
 
 static bool
-write_attribute (const char *root,
-                 const char *name,
-                 const char *value)
+write_file (const char *path,
+            const char *value)
 {
-        char path[512];
         FILE *file;
 
-        snprintf (path, sizeof(path), "%s/iio:device0/%s", root, name);
         file = fopen (path, "w");
         if (!file)
                 return false;
         bool success = fputs (value, file) >= 0;
         return fclose (file) == 0 && success;
+}
+
+static bool
+write_attribute (const char *root,
+                 const char *name,
+                 const char *value)
+{
+        char path[512];
+
+        snprintf (path, sizeof(path), "%s/iio:device0/%s", root, name);
+        return write_file (path, value);
 }
 
 static bool
@@ -155,12 +163,78 @@ test_console_rotation_mapping (void)
         return true;
 }
 
+static bool
+test_early_console_and_driver_takeover (void)
+{
+        char root[] = "/tmp/plymouth-early-console-XXXXXX";
+        char path[512], value[3] = { 0 };
+        const char *directories[] = { "class", "class/drm", "class/graphics", "class/graphics/fbcon",
+                                      "class/drm/card0-Unknown-1", "class/drm/card1-HDMI-A-1" };
+        const char *files[] = { "class/drm/card0-Unknown-1/status", "class/drm/card1-HDMI-A-1/status",
+                                "class/graphics/fbcon/rotate", "class/graphics/fbcon/rotate_all" };
+        const char *contents[] = { "connected\n", "disconnected\n", "0\n", "0\n" };
+        FILE *file;
+        size_t i;
+
+        PLY_TEST_ASSERT (mkdtemp (root) != NULL);
+        for (i = 0; i < sizeof(directories) / sizeof(directories[0]); i++) {
+                snprintf (path, sizeof(path), "%s/%s", root, directories[i]);
+                PLY_TEST_ASSERT (mkdir (path, 0700) == 0);
+        }
+        for (i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+                snprintf (path, sizeof(path), "%s/%s", root, files[i]);
+                PLY_TEST_ASSERT (write_file (path, contents[i]));
+        }
+        PLY_TEST_ASSERT (ply_orientation_sync_console (root, PLY_PIXEL_BUFFER_ROTATE_COUNTER_CLOCKWISE));
+        snprintf (path, sizeof(path), "%s/class/graphics/fbcon/rotate_all", root);
+        file = fopen (path, "r");
+        PLY_TEST_ASSERT (file != NULL && fread (value, 1, 2, file) == 2);
+        fclose (file);
+        PLY_TEST_ASSERT (strcmp (value, "3\n") == 0);
+
+        /* A matching active-console value must avoid another global redraw. */
+        PLY_TEST_ASSERT (write_file (path, "1\n"));
+        snprintf (path, sizeof(path), "%s/class/graphics/fbcon/rotate", root);
+        PLY_TEST_ASSERT (write_file (path, "3\n"));
+        PLY_TEST_ASSERT (ply_orientation_sync_console (root, PLY_PIXEL_BUFFER_ROTATE_COUNTER_CLOCKWISE));
+        snprintf (path, sizeof(path), "%s/class/graphics/fbcon/rotate_all", root);
+        file = fopen (path, "r");
+        PLY_TEST_ASSERT (file != NULL && fread (value, 1, 2, file) == 2);
+        fclose (file);
+        PLY_TEST_ASSERT (strcmp (value, "1\n") == 0);
+
+        /* Native-driver takeover can reset the console without a sensor change. */
+        snprintf (path, sizeof(path), "%s/class/graphics/fbcon/rotate", root);
+        PLY_TEST_ASSERT (write_file (path, "0\n"));
+        PLY_TEST_ASSERT (ply_orientation_sync_console (root, PLY_PIXEL_BUFFER_ROTATE_COUNTER_CLOCKWISE));
+        snprintf (path, sizeof(path), "%s/class/graphics/fbcon/rotate_all", root);
+        file = fopen (path, "r");
+        PLY_TEST_ASSERT (file != NULL && fread (value, 1, 2, file) == 2);
+        fclose (file);
+        PLY_TEST_ASSERT (strcmp (value, "3\n") == 0);
+
+        snprintf (path, sizeof(path), "%s/class/drm/card1-HDMI-A-1/status", root);
+        PLY_TEST_ASSERT (write_file (path, "connected\n"));
+        PLY_TEST_ASSERT (!ply_orientation_sync_console (root, PLY_PIXEL_BUFFER_ROTATE_UPRIGHT));
+        for (i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+                snprintf (path, sizeof(path), "%s/%s", root, files[i]);
+                PLY_TEST_ASSERT (unlink (path) == 0);
+        }
+        for (i = sizeof(directories) / sizeof(directories[0]); i > 0; i--) {
+                snprintf (path, sizeof(path), "%s/%s", root, directories[i - 1]);
+                PLY_TEST_ASSERT (rmdir (path) == 0);
+        }
+        PLY_TEST_ASSERT (rmdir (root) == 0);
+        return true;
+}
+
 static const ply_test_case_t cases[] = {
         { "four cardinal orientations", test_cardinal_orientations },
         { "flat, diagonal and invalid readings", test_uncertain_readings_preserve_orientation },
         { "mount matrices and panel rotation", test_mount_matrix_and_composition },
         { "late sensor, debounce, calibration and recovery", test_late_sensor_debounce_calibration_and_recovery },
-        { "console angle mapping and unavailable interface", test_console_rotation_mapping }
+        { "console angle mapping and unavailable interface", test_console_rotation_mapping },
+        { "early console, native-driver reset and external displays", test_early_console_and_driver_takeover }
 };
 
 PLY_TEST_MAIN (cases)

@@ -2446,7 +2446,10 @@ ply_renderer_backend_set_orientation (ply_renderer_backend_t     *backend,
                                                             (void *) (intptr_t) output->controller_id);
                         if (output_head != head)
                                 continue;
-                        if (output_is_builtin (output)) {
+                        /* Firmware-backed simpledrm often calls the sole boot
+                         * display "Unknown" before the native panel appears. */
+                        if (output_is_builtin (output) ||
+                            (backend->simpledrm && backend->connected_count == 1)) {
                                 builtin = true;
                                 rotation = output->rotation;
                         } else {

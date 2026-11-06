@@ -172,12 +172,16 @@ static void
 poll_orientation (ply_device_manager_t *manager,
                   ply_event_loop_t    *loop)
 {
-        if (!manager->paused && manager->renderers_activated &&
+        if (!manager->paused &&
             ply_orientation_read (manager->orientation_sensor, &manager->orientation)) {
                 manager->orientation_valid = true;
-                ply_hashtable_foreach (manager->renderers,
-                                       (ply_hashtable_foreach_func_t *) rotate_renderer,
-                                       manager);
+                /* Sensors and fbcon can be ready before a graphical renderer. */
+                if (!manager->renderers_activated || ply_list_get_length (manager->pixel_displays) == 0)
+                        ply_orientation_sync_console ("/sys", manager->orientation);
+                if (manager->renderers_activated)
+                        ply_hashtable_foreach (manager->renderers,
+                                               (ply_hashtable_foreach_func_t *) rotate_renderer,
+                                               manager);
         }
         ply_event_loop_watch_for_timeout (loop, 0.2,
                                           (ply_event_loop_timeout_handler_t) poll_orientation,

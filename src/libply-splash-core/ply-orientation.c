@@ -26,6 +26,7 @@ struct _ply_orientation
 };
 
 static const double identity_matrix[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+static const char console_angles[] = { '0', '2', '1', '3' };
 
 bool
 ply_orientation_parse_matrix (const char *text,
@@ -115,14 +116,13 @@ bool
 ply_orientation_update_console (const char                 *path,
                                 ply_pixel_buffer_rotation_t rotation)
 {
-        static const char angles[] = { '0', '2', '1', '3' };
         char value[2] = { 0, '\n' };
         int fd;
         bool success;
 
-        if ((unsigned int) rotation >= sizeof(angles))
+        if ((unsigned int) rotation >= sizeof(console_angles))
                 return false;
-        value[0] = angles[rotation];
+        value[0] = console_angles[rotation];
         fd = open (path, O_WRONLY | O_CLOEXEC);
         if (fd < 0)
                 return false;
@@ -172,6 +172,53 @@ read_number (const char *device_path,
                 return false;
         *number = value;
         return true;
+}
+
+bool
+ply_orientation_sync_console (const char                 *sysfs_root,
+                              ply_pixel_buffer_rotation_t rotation)
+{
+        glob_t connectors = { 0 };
+        char *pattern, *directory, *path;
+        unsigned int connected = 0;
+        bool panel = false;
+        bool success = false;
+        double current;
+        size_t i;
+
+        if ((unsigned int) rotation >= sizeof(console_angles))
+                return false;
+        if (asprintf (&pattern, "%s/class/drm/card*-*", sysfs_root) < 0)
+                return false;
+        glob (pattern, 0, NULL, &connectors);
+        free (pattern);
+        for (i = 0; i < connectors.gl_pathc; i++) {
+                char status[256];
+                const char *name = connectors.gl_pathv[i];
+
+                if (!read_attribute (name, "status", status) || strcmp (status, "connected") != 0)
+                        continue;
+                connected++;
+                panel = strstr (name, "-eDP-") || strstr (name, "-LVDS-") ||
+                        strstr (name, "-DSI-") || strstr (name, "-Unknown-");
+        }
+        globfree (&connectors);
+        if (connected != 1 || !panel)
+                return false;
+        if (asprintf (&directory, "%s/class/graphics/fbcon", sysfs_root) < 0)
+                return false;
+        /* Read back the actual value: native-driver takeover may reset fbcon
+         * even when the sensor's orientation has not changed. */
+        if (read_number (directory, "rotate", &current) && current == console_angles[rotation] - '0') {
+                free (directory);
+                return true;
+        }
+        if (asprintf (&path, "%s/rotate_all", directory) >= 0) {
+                success = ply_orientation_update_console (path, rotation);
+                free (path);
+        }
+        free (directory);
+        return success;
 }
 
 static bool

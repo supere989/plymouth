@@ -22,5 +22,7 @@ ply_pixel_buffer_rotation_t ply_orientation_compose (ply_pixel_buffer_rotation_t
                                                      ply_pixel_buffer_rotation_t orientation);
 bool ply_orientation_update_console (const char                 *path,
                                      ply_pixel_buffer_rotation_t rotation);
+bool ply_orientation_sync_console (const char                 *sysfs_root,
+                                   ply_pixel_buffer_rotation_t rotation);
 
 #endif
